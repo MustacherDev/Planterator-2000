@@ -129,7 +129,7 @@ class BackgroundManager{
 
   update(dt){
 
-    this.offset += 0.005*dt;
+    this.offset += 0.00125*dt;
     if(this.offset > 1){
       this.offset -= 1;
      

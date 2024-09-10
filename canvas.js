@@ -21,7 +21,7 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 function resizeCanvas(){
 
   if(isMobile){
-    roomWidth = 1450;
+    roomWidth = 720;
     roomHeight = 720;
 
     canvas.width  = window.innerWidth;
