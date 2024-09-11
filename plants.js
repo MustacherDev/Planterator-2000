@@ -75,6 +75,7 @@ class PlantPart{
         this.type = 0;
 
         this.matureState = 0;
+        this.age = 0;
         this.matureSpd = 1;
 
         this.grownWidth = 10
@@ -102,6 +103,11 @@ class PlantPart{
 
     }
 
+    inactivate(plant){
+        this.active = false;
+        plant.inactiveParts++;
+    }
+
     updateParams(dt, plant){
         this.x = this.offX + this.parentResX;
         this.y = this.offY + this.parentResY;
@@ -117,6 +123,8 @@ class PlantPart{
 
         this.matureState += dt*this.matureSpd/plant.options.matureTime;
         this.matureState = clamp(this.matureState, 0, 1.1);
+
+        this.age += dt/plant.options.matureTime;
     }
 
     update(dt, plant){
@@ -155,8 +163,8 @@ class PlantPart{
 
 
 class PlantEnd extends PlantPart{
-    constructor(x, y, xRat, yRat, ang, spr, sprImg, sprOffX, sprOffY, plant){
-        super(x, y, xRat, yRat, ang, plant);
+    constructor(x, y, xRat, yRat, ang, spr, sprImg, sprOffX, sprOffY, parent, plant){
+        super(x, y, xRat, yRat, ang, parent, plant);
         this.sprite = spr;
         this.spriteImg = sprImg;
         this.sprOffX = sprOffX;
@@ -171,7 +179,7 @@ class PlantEnd extends PlantPart{
         
     }
 
-    updatePlantEnd(dt){
+    updatePlantEnd(dt, plant){
         if(this.attached) return;
 
         this.vspd += this.vacc*dt;
@@ -179,7 +187,7 @@ class PlantEnd extends PlantPart{
         this.y += this.vspd*dt;
 
         if(this.y >= roomHeight+100){
-            this.active = false;
+            this.inactivate(plant);
         }
         
     }
@@ -190,8 +198,8 @@ class PlantEnd extends PlantPart{
 }
 
 class PlantBerry extends PlantEnd{
-    constructor(x, y, xRat, yRat, ang, plant){
-        super(x, y, xRat, yRat, ang, sprites[SPR.PLANTS], 0, 9, 2, plant);
+    constructor(x, y, xRat, yRat, ang, parent, plant){
+        super(x, y, xRat, yRat, ang, sprites[SPR.PLANTS], 0, 9, 2, parent, plant);
         this.type = 2;
         this.sprScl = 2;
         this.depth = -1;
@@ -206,7 +214,7 @@ class PlantBerry extends PlantEnd{
             this.updateParams(dt, plant);
         }
 
-        this.updatePlantEnd(dt);
+        this.updatePlantEnd(dt, plant);
 
         this.angSpd += dt*(-this.ang)/200;
         this.offAng += this.angSpd*dt;
@@ -215,9 +223,9 @@ class PlantBerry extends PlantEnd{
 }
 
 class PlantFlower extends PlantEnd{
-    constructor(x, y, xRat, yRat, ang, plant){
-        super(x, y, xRat, yRat, ang, sprites[SPR.PLANTS], 1, 8, 8, plant);
-        this.type = 2;
+    constructor(x, y, xRat, yRat, ang, parent, plant){
+        super(x, y, xRat, yRat, ang, sprites[SPR.PLANTS], 1, 8, 8, parent, plant);
+        this.type = 3;
         this.sprScl = 2;
         this.depth = -1;
 
@@ -230,7 +238,7 @@ class PlantFlower extends PlantEnd{
         if(this.attached){
             this.updateParams(dt, plant);
         }
-        this.updatePlantEnd(dt);
+        this.updatePlantEnd(dt, plant);
         this.angSpd += dt*(-this.ang)/200;
         this.offAng += this.angSpd*dt;
         this.angSpd *= Math.pow(0.98, dt);
@@ -238,22 +246,29 @@ class PlantFlower extends PlantEnd{
 }
 
 class PlantLeaf extends PlantEnd{
-    constructor(x, y, xRat, yRat, ang, plant){
-        super(x, y, xRat, yRat, ang, sprites[SPR.PLANTS], 4, 0, 0, plant);
-        this.type = 2;
-        this.sprScl = 2;
+    constructor(x, y, xRat, yRat, ang, parent, plant){
+        super(x, y, xRat, yRat, ang, sprites[SPR.PLANTS], 4, 0, 0, parent, plant);
+        this.type = 4;
+        this.sprScl = 2 * plant.options.leavesScl;
         this.depth = -0.5;
 
         this.angSpd = 0;
 
         this.matureSpd = 0.25;
+
+        this.life = randInt(100, 2000);
     }
 
     update(dt, plant){
         if(this.attached){
             this.updateParams(dt, plant);
         }
-        this.updatePlantEnd(dt);
+        this.updatePlantEnd(dt, plant);
+
+        if(this.age >= this.life){
+            //this.parent.removeLeaves(plant);
+            this.parent.removeChild(this, plant);
+        }
         this.angSpd += dt*(-this.ang)/200;
         this.offAng += this.angSpd*dt;
         this.angSpd *= Math.pow(0.98, dt);
@@ -261,21 +276,23 @@ class PlantLeaf extends PlantEnd{
 }
 
 class PlantTrunk extends PlantPart{
-    constructor(x, y, xRat, yRat, ang, trunkGen, plant){
-        super(x, y, xRat, yRat, ang, plant);
+    constructor(x, y, xRat, yRat, ang, trunkGen, parent, plant){
+        super(x, y, xRat, yRat, ang, parent, plant);
        
 
         this.children = [];
 
         this.type = 0;
 
+        this.continued = false;
+
         this.canHaveFruit = chance(plant.options.haveFruitChance);
         this.hasFruit = false;
 
         this.trunkGen = trunkGen;
 
-        this.grownWidth = 10
-        this.grownHeight = 100;
+        this.grownWidth = plant.options.trunkMaxWid*(1 + randAmp(plant.options.trunkWidVarPerc));
+        this.grownHeight = plant.options.trunkMaxHei*(1 + randAmp(plant.options.trunkHeiVarPerc));
         this.startWidth = 1;
         this.startHeight = 1;
 
@@ -294,13 +311,44 @@ class PlantTrunk extends PlantPart{
         return plant.options.trunkGrowChance - plant.options.trunkGrowChanceChildImpact*this.children.length;
     }
 
-    removeChild(childIndex, plant){
+    removeChildIndex(childIndex, plant){
         var child = this.children[childIndex];
        
         this.children.splice(childIndex, 1);
-        if(child.type == 2){
+        if(child.type == 2 || child.type == 3 || child.type == 4){
             child.attached = false;
             plant.deattached.push(child);
+        }
+      
+    }
+
+    removeChild(child, plant){
+        for(var i = 0 ;i < this.children.length; i++){
+            if(child === this.children[i]){
+                this.children.splice(i, 1);
+                if(child.type == 2 || child.type == 3 || child.type == 4){
+                    child.attached = false;
+                    plant.deattached.push(child);
+                }
+                return;
+            }
+        }
+      
+    }
+
+    removeLeaves(plant){
+        for(var i = 0 ;i < this.children.length; i++){
+            
+            var child = this.children[i];
+
+            if(child.type == 4){
+                this.children.splice(i, 1);
+                i--;
+            
+                child.attached = false;
+                plant.deattached.push(child);
+                
+            }
         }
       
     }
@@ -308,14 +356,15 @@ class PlantTrunk extends PlantPart{
     createBranch(plant){
         if(plant.allParts.length > 3000) return; 
         if(chance(this.newTrunkChance(plant)) && this.trunkGen < plant.options.trunkGenMax){
-            if(chance(plant.options.trunkBifurcateProb + plant.options.trunkBifurcateProbGenImpact*this.trunkGen)){
+            if(chance(plant.options.trunkTrifurcateProb + plant.options.trunkTrifurcateProbGenImpact*this.trunkGen) && !this.continued){
                 var xx = 0;
                 var yy = this.height;
-                var spreadAng = plant.options.trunkBifurcateAngSpread;
-                var axisAng = randRange(-plant.options.trunkChildAngSpread, plant.options.trunkChildAngSpread);
+                var spreadAng = plant.options.trunkTrifurcateAngSpread;
+                var axisAng = plant.options.trunkChildAng + randRange(-plant.options.trunkChildAngSpread, plant.options.trunkChildAngSpread);
 
-                var branch1 = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, axisAng - spreadAng/2, this.trunkGen+1, plant);
-                var branch2 = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, axisAng + spreadAng/2, this.trunkGen+1, plant);
+                var branch1 = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, axisAng - spreadAng/2, this.trunkGen+1, this, plant);
+                var branch2 = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, axisAng              , this.trunkGen+1, this, plant);
+                var branch3 = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, axisAng + spreadAng/2, this.trunkGen+1, this, plant);
                 
                 plant.allParts.push(branch1);
                 this.setChildParams(branch1);
@@ -323,18 +372,48 @@ class PlantTrunk extends PlantPart{
                 plant.allParts.push(branch2);
                 this.setChildParams(branch2);
                 this.children.push(branch2);
+                plant.allParts.push(branch3);
+                this.setChildParams(branch3);
+                this.children.push(branch3);
+
+                this.continued = true;
+            } else if(chance(plant.options.trunkBifurcateProb + plant.options.trunkBifurcateProbGenImpact*this.trunkGen)){
+                var xx = 0;
+                var yy = this.height;
+                var spreadAng = plant.options.trunkBifurcateAngSpread;
+                var axisAng = plant.options.trunkChildAng +randAmp(plant.options.trunkChildAngSpread);
+                if(this.continued){
+                    axisAng = plant.options.trunkBranchAng +randAmp(plant.options.trunkBranchAngSpread);
+                }
+
+                var branch1 = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, axisAng - spreadAng/2, this.trunkGen+1, this, plant);
+                var branch2 = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, axisAng + spreadAng/2, this.trunkGen+1, this, plant);
+                
+                plant.allParts.push(branch1);
+                this.setChildParams(branch1);
+                this.children.push(branch1);
+                plant.allParts.push(branch2);
+                this.setChildParams(branch2);
+                this.children.push(branch2);
+
+                this.continued = true;
             } else {
                 var dir = (chance(0.5) ? 1 : -1);
                 var xx = 0;
                 var yy = this.height;
-                var ang = randRange(Math.PI/25, Math.PI/4)*dir
+                var ang = plant.options.trunkChildAng + randAmp(plant.options.trunkChildAngSpread);
 
-                var branch = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, ang, this.trunkGen+1, plant);
+                if(this.continued){
+                    ang = plant.options.trunkBranchAng + randAmp(plant.options.trunkBranchAngSpread);
+                }
+
+                var branch = new PlantTrunk(xx, yy, xx/this.width, yy/this.height, ang, this.trunkGen+1, this, plant);
 
                 branch.canHaveFruit = chance(plant.options.haveFruitChance);
                 plant.allParts.push(branch);
                 this.setChildParams(branch);
                 this.children.push(branch);
+                this.continued = true;
             }
         } else {
             if(!this.hasFruit){
@@ -345,9 +424,9 @@ class PlantTrunk extends PlantPart{
 
                     var branch;
                     if(chance(0.5)){
-                        branch = new PlantBerry(xx, yy, xx/this.width, yy/this.height, randRange(-Math.PI/8, Math.PI/8), plant);
+                        branch = new PlantBerry(xx, yy, xx/this.width, yy/this.height, randRange(-Math.PI/8, Math.PI/8), this, plant);
                     } else {
-                        branch = new PlantFlower(xx, yy, xx/this.width, yy/this.height, randRange(-Math.PI/8, Math.PI/8), plant);
+                        branch = new PlantFlower(xx, yy, xx/this.width, yy/this.height, randRange(-Math.PI/8, Math.PI/8), this, plant);
                     }
 
                     plant.allParts.push(branch);
@@ -357,7 +436,7 @@ class PlantTrunk extends PlantPart{
                     var xx = randRange(-this.width/2, this.width/2);
                     var yy = this.height;
 
-                    var leaf = new PlantLeaf(xx, yy, xx/this.width, yy/this.height, randRange(-Math.PI/8, Math.PI/8), plant);
+                    var leaf = new PlantLeaf(xx, yy, xx/this.width, yy/this.height, randRange(-Math.PI/8, Math.PI/8), this, plant);
                     plant.allParts.push(leaf);
                     this.setChildParams(leaf);
                     this.children.push(leaf);
@@ -371,8 +450,8 @@ class PlantTrunk extends PlantPart{
     update(dt, plant){
         this.updateParams(dt, plant);
 
-        this.width  = this.startWidth + (this.grownWidth - plant.options.trunkGenWidImpact*this.trunkGen)*this.matureState;
-        this.height = this.startHeight + (this.grownHeight - plant.options.trunkGenHeiImpact*this.trunkGen)*this.matureState;
+        this.width  = this.startWidth + (this.grownWidth - plant.options.trunkGenWidImpact*this.trunkGen - plant.options.trunkGenWidImpactSqr*this.trunkGen*this.trunkGen)*this.matureState;
+        this.height = this.startHeight + (this.grownHeight - plant.options.trunkGenHeiImpact*this.trunkGen - plant.options.trunkGenHeiImpactSqr*this.trunkGen*this.trunkGen)*this.matureState;
 
         this.growTickAlarm.update(dt);
         if(this.growTickAlarm.finished){
@@ -383,9 +462,9 @@ class PlantTrunk extends PlantPart{
         if(this.matureState > 1){
             for(var i = 0; i < this.children.length; i++){
                 var child = this.children[i];
-                if(child.type == 2 && child.matureState >= 1){
+                if(child.type == 4 && child.matureState >= 1){
                     if(this.trunkGen <= 2){
-                        this.removeChild(i, plant);
+                        this.removeChildIndex(i, plant);
                         i--;
                     }
                 }
@@ -447,23 +526,74 @@ class ValueContainer{
     }
 }
 
-class PlantOptions{
-    constructor(){
+/*
         this.trunkGenMax = 8;
-        this.trunkMaxWid = 10;
+        this.trunkMaxWid = 8;
         this.trunkGenWidImpact = 1;
-        this.trunkMaxHei = 50;
+        this.trunkGenWidImpactSqr = 0;
+        this.trunkMaxHei = 90;
         this.trunkGenHeiImpact = 8;
+        this.trunkGenHeiImpactSqr = -0.1;
+        this.trunkHeiVarPerc = 0.05;
+        this.trunkWidVarPerc = 0.01; 
+
+        this.leavesScl = 1.2;
 
     
         this.trunkGrowChance = 0.4;
         this.trunkGrowChanceChildImpact = 0.2;
 
+        this.trunkChildAng = 0;
+        this.trunkChildAngSpread = Math.PI/8;
+
         this.trunkBifurcateProb = 0;
         this.trunkBifurcateProbGenImpact = 0.2;
-
         this.trunkBifurcateAngSpread = Math.PI/4;
-        this.trunkChildAngSpread = Math.PI/4;
+
+
+        this.trunkTrifurcateProb = 0.05;
+        this.trunkTrifurcateProbGenImpact = 0.01;
+        this.trunkTrifurcateAngSpread = Math.PI/4;
+
+
+
+        this.haveFruitChance = 0.01; 
+
+        this.matureTime = 10;
+        this.growTick = 5;
+*/
+
+class PlantOptions{
+    constructor(){
+        this.trunkGenMax = 8;
+        this.trunkMaxWid = 8;
+        this.trunkGenWidImpact = 1;
+        this.trunkGenWidImpactSqr = 0;
+        this.trunkMaxHei = 90;
+        this.trunkGenHeiImpact = 8;
+        this.trunkGenHeiImpactSqr = -0.1;
+        this.trunkHeiVarPerc = 0.05;
+        this.trunkWidVarPerc = 0.01; 
+
+        this.leavesScl = 1.2;
+
+    
+        this.trunkGrowChance = 0.4;
+        this.trunkGrowChanceChildImpact = 0.2;
+
+        this.trunkChildAng = 0;
+        this.trunkChildAngSpread = Math.PI/50;
+        this.trunkBranchAng = Math.PI/40;
+        this.trunkBranchAngSpread = Math.PI/6;
+
+        this.trunkBifurcateProb = 0;
+        this.trunkBifurcateProbGenImpact = 0.2;
+        this.trunkBifurcateAngSpread = Math.PI/4;
+
+
+        this.trunkTrifurcateProb = 0;
+        this.trunkTrifurcateProbGenImpact = 0.01;
+        this.trunkTrifurcateAngSpread = Math.PI/4;
 
 
 
@@ -485,9 +615,11 @@ class Plant{
         this.options = new PlantOptions();
         
 
-        this.parts = [new PlantTrunk(this.x, this.y, 1, 1, this.ang, 0, this)];
+        this.parts = [new PlantTrunk(this.x, this.y, 1, 1, this.ang, 0, null, this)];
 
         this.allParts = [this.parts[0]];
+
+        this.inactiveParts = 0;
 
         this.deattached = [];
 
@@ -512,6 +644,27 @@ class Plant{
             }
         }
 
+        if(this.inactiveParts > 50){
+            for(var i = 0; i < this.allParts.length; i++){
+                if(!this.allParts[i].active){
+                    this.allParts.splice(i, 1);
+                    i--;
+                }
+            }
+            this.inactiveParts = 0;
+        }
+
+    }
+
+    shaveLeaves(){
+        for(var i = 0 ; i < this.allParts.length; i++){
+            var part = this.allParts[i];
+            if(part.type == 4 && chance(0.1)){
+                if(part.parent){
+                    part.parent.removeLeaves(this);
+                }
+            }
+        }
     }
 
     createRandomBranch(branchNum){
@@ -555,6 +708,10 @@ class PlantManager{
         this.restartBut.update(input.mouseX, input.mouseY, input.mouseState[0][0], input.mouseState[0][1]);
         if(this.restartBut.clicked){
             this.restart();
+        }
+
+        if(input.mouseState[2][1]){
+            this.plants[0].shaveLeaves();
         }
     }
     pushDrawList(){
